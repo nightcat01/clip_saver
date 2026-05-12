@@ -1,15 +1,12 @@
 ---
 created: {{created}}
 type: {{type}}
-source: {{source}}
 tags:
 {{tags}}
+summary: {{summary}}
+source: {{source}}
 ---
 
 # {{title}}
 
-## Summary
-{{summary}}
-
-## Content
 {{content}}

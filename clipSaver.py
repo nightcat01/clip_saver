@@ -1,9 +1,10 @@
 from pathlib import Path
 from datetime import datetime
-import json
-import re
+import threading
 import subprocess
 import sys
+import re
+import json
 
 import pyperclip
 import keyboard
@@ -13,75 +14,254 @@ import tkinter as tk
 from tkinter import messagebox
 
 
-APP_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = APP_DIR / "config.json"
-TEMPLATE_PATH = APP_DIR / "note_template.md"
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_FILE = BASE_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "save_path": "E:/memo/memo/clip",
+    "save_dir": "E:/memo/memo/clip",
     "hotkey": "ctrl+alt+a",
-    "preview_length": 300,
-    "filename_format": "%Y-%m-%d_%H%M%S.md",
     "default_type": "ai-log",
     "default_tags": ["ai-log"],
-    "default_title": "Clipboard Note",
-    "source": "clipboard"
+    "preview_length": 300
 }
-
-DEFAULT_TEMPLATE = """---
-created: {{created}}
-type: {{type}}
-source: {{source}}
-tags:
-{{tags}}
----
-
-# {{title}}
-
-## Summary
-{{summary}}
-
-## Content
-{{content}}
-"""
 
 last_saved = ""
 
 
-def ensure_file(path: Path, content: str):
-    if not path.exists():
-        path.write_text(content, encoding="utf-8")
-
-
-def load_config() -> dict:
-    ensure_file(
-        CONFIG_PATH,
-        json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2)
-    )
-
-    try:
-        user_config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        messagebox.showerror(
-            "Clip Saver",
-            f"config.json 형식이 잘못됐어.\n\n{e}"
-        )
+def load_config():
+    if not CONFIG_FILE.exists():
+        save_config(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
 
-    return {**DEFAULT_CONFIG, **user_config}
+    try:
+        config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        merged = DEFAULT_CONFIG.copy()
+        merged.update(config)
+        return merged
+    except Exception:
+        return DEFAULT_CONFIG.copy()
 
 
-def load_template() -> str:
-    ensure_file(TEMPLATE_PATH, DEFAULT_TEMPLATE)
-    return TEMPLATE_PATH.read_text(encoding="utf-8")
+def save_config(config):
+    CONFIG_FILE.write_text(
+        json.dumps(config, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
 
-CONFIG = load_config()
-SAVE_PATH = Path(CONFIG["save_path"])
-HOTKEY = CONFIG["hotkey"]
-PREVIEW_LENGTH = int(CONFIG["preview_length"])
+def get_save_path():
+    config = load_config()
+    save_dir = config.get("save_dir", DEFAULT_CONFIG["save_dir"])
 
-SAVE_PATH.mkdir(parents=True, exist_ok=True)
+    path = Path(save_dir)
+
+    if not path.is_absolute():
+        path = BASE_DIR / path
+
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def split_tags(value):
+    value = value.replace("[", "").replace("]", "")
+    value = value.replace('"', "").replace("'", "")
+    return [tag.strip() for tag in re.split(r"[,/|]", value) if tag.strip()]
+
+
+def normalize_tags(tags):
+    result = []
+
+    for tag in tags:
+        tag = str(tag).strip().lower()
+        tag = re.sub(r"^\s*[-*]\s*", "", tag)
+        tag = re.sub(r"\s+", "-", tag)
+        tag = re.sub(r"[^a-z0-9가-힣_-]", "", tag)
+
+        if tag and tag not in result:
+            result.append(tag)
+
+    return result[:5]
+
+
+def parse_ai_metadata(text, config):
+    metadata = {
+        "title": "",
+        "summary": "",
+        "tags": [],
+        "type": config.get("default_type", "ai-log")
+    }
+
+    lines = text.splitlines()
+    collecting_tags = False
+
+    for raw_line in lines[:100]:
+        line = raw_line.strip()
+
+        if not line:
+            continue
+
+        if line in ("---", "```", "```markdown", "```md"):
+            continue
+
+        if line.startswith("```"):
+            continue
+
+        key_match = re.match(
+            r"^(title|summary|type)\s*:\s*(.*?)\s*$",
+            line,
+            re.IGNORECASE
+        )
+
+        if key_match:
+            key = key_match.group(1).lower()
+            value = key_match.group(2).strip().strip('"').strip("'")
+
+            if value:
+                metadata[key] = value
+
+            collecting_tags = False
+            continue
+
+        tags_start = re.match(
+            r"^tags\s*:\s*(.*?)\s*$",
+            line,
+            re.IGNORECASE
+        )
+
+        if tags_start:
+            collecting_tags = True
+            inline_value = tags_start.group(1).strip()
+
+            if inline_value:
+                metadata["tags"].extend(split_tags(inline_value))
+
+            continue
+
+        if collecting_tags:
+            nested_key = re.match(
+                r"^(title|summary|type)\s*:\s*(.*?)\s*$",
+                line,
+                re.IGNORECASE
+            )
+
+            if nested_key:
+                key = nested_key.group(1).lower()
+                value = nested_key.group(2).strip().strip('"').strip("'")
+
+                if value:
+                    metadata[key] = value
+
+                collecting_tags = False
+                continue
+
+            tag_match = re.match(r"^[-*]\s+(.+?)\s*$", line)
+
+            if tag_match:
+                metadata["tags"].append(tag_match.group(1).strip())
+                continue
+
+            plain_tag_match = re.match(
+                r"^[a-zA-Z0-9가-힣][a-zA-Z0-9가-힣_-]*$",
+                line
+            )
+
+            if plain_tag_match:
+                metadata["tags"].append(line)
+                continue
+
+            collecting_tags = False
+
+    metadata["tags"] = normalize_tags(metadata["tags"])
+
+    if not metadata["tags"]:
+        metadata["tags"] = normalize_tags(config.get("default_tags", ["ai-log"]))
+
+    if not metadata["title"]:
+        metadata["title"] = generate_title(text)
+
+    if not metadata["summary"]:
+        metadata["summary"] = generate_summary(text)
+
+    return metadata
+
+
+def generate_title(text):
+    for line in text.splitlines():
+        line = line.strip()
+
+        if not line:
+            continue
+
+        if line.startswith("---"):
+            continue
+
+        if line.startswith("#"):
+            return line.lstrip("#").strip()[:60]
+
+        if not re.match(r"^(title|summary|tags|type)\s*:", line, re.IGNORECASE):
+            return line[:60]
+
+    return "untitled-log"
+
+
+def generate_summary(text):
+    cleaned = []
+
+    for line in text.splitlines():
+        line = line.strip()
+
+        if not line:
+            continue
+
+        if line in ("---", "```", "```markdown", "```md"):
+            continue
+
+        if re.match(r"^(title|summary|tags|type)\s*:", line, re.IGNORECASE):
+            continue
+
+        if re.match(r"^[-*]\s+", line):
+            continue
+
+        cleaned.append(line)
+
+    if not cleaned:
+        return "클립보드 내용을 저장한 메모."
+
+    return " ".join(cleaned)[:120]
+
+
+def remove_existing_metadata_block(text):
+    lines = text.splitlines()
+
+    if lines and lines[0].strip() == "---":
+        for i in range(1, min(len(lines), 120)):
+            if lines[i].strip() == "---":
+                return "\n".join(lines[i + 1:]).strip()
+
+    return text.strip()
+
+
+def sanitize_filename(title):
+    title = title.strip()
+    title = re.sub(r'[\\/:*?"<>|]', "", title)
+    title = re.sub(r"\s+", "-", title)
+    return title[:80] or "untitled-log"
+
+
+def build_markdown(metadata, body):
+    tag_lines = "\n".join([f"  - {tag}" for tag in metadata.get("tags", [])])
+
+    return f"""---
+title: {metadata.get("title", "untitled-log")}
+summary: {metadata.get("summary", "")}
+tags:
+{tag_lines}
+type: {metadata.get("type", "ai-log")}
+created: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+---
+
+{body}
+"""
 
 
 def create_icon_image():
@@ -92,9 +272,21 @@ def create_icon_image():
     return image
 
 
+def show_info(title, message):
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    messagebox.showinfo(title, message)
+    root.destroy()
+
+
 def show_confirm_window(content: str) -> bool:
-    preview = content[:PREVIEW_LENGTH]
-    if len(content) > PREVIEW_LENGTH:
+    config = load_config()
+    preview_length = int(config.get("preview_length", 300))
+
+    preview = content[:preview_length]
+
+    if len(content) > preview_length:
         preview += "\n\n...(생략)..."
 
     root = tk.Tk()
@@ -110,72 +302,47 @@ def show_confirm_window(content: str) -> bool:
     return result
 
 
-def sanitize_title(text: str) -> str:
-    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    first_line = re.sub(r"^#+\s*", "", first_line)
-    first_line = first_line[:80].strip()
-    return first_line or CONFIG["default_title"]
-
-
-def format_tags(tags) -> str:
-    if not tags:
-        return "  - untagged"
-    return "\n".join(f"  - {tag}" for tag in tags)
-
-
-def render_note(content: str, now: datetime) -> str:
-    template = load_template()
-
-    values = {
-        "created": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "type": CONFIG["default_type"],
-        "source": CONFIG["source"],
-        "tags": format_tags(CONFIG.get("default_tags", [])),
-        "title": sanitize_title(content),
-        "summary": "",
-        "content": content,
-    }
-
-    note = template
-    for key, value in values.items():
-        note = note.replace("{{" + key + "}}", str(value))
-
-    return note
-
-
 def save_clipboard():
     global last_saved
 
-    content = pyperclip.paste().strip()
+    try:
+        content = pyperclip.paste().strip()
+        config = load_config()
 
-    if not content:
-        messagebox.showinfo("Clip Saver", "클립보드가 비어있어.")
-        return
+        if not content:
+            show_info("Clip Saver", "클립보드가 비어있어.")
+            return
 
-    if content == last_saved:
-        messagebox.showinfo("Clip Saver", "이미 저장한 내용이야.")
-        return
+        if content == last_saved:
+            show_info("Clip Saver", "이미 저장한 내용이야.")
+            return
 
-    if not show_confirm_window(content):
-        return
+        if not show_confirm_window(content):
+            return
 
-    now = datetime.now()
-    filename = now.strftime(CONFIG["filename_format"])
-    path = SAVE_PATH / filename
+        metadata = parse_ai_metadata(content, config)
+        body = remove_existing_metadata_block(content)
 
-    path.write_text(render_note(content, now), encoding="utf-8")
+        now = datetime.now()
+        filename = f"{now.strftime('%Y-%m-%d_%H%M%S')}_{sanitize_filename(metadata['title'])}.md"
 
-    last_saved = content
+        save_path = get_save_path()
+        path = save_path / filename
 
-    messagebox.showinfo("Clip Saver", f"저장 완료\n\n{path}")
+        md = build_markdown(metadata, body)
+        path.write_text(md, encoding="utf-8")
+
+        last_saved = content
+
+        show_info("Clip Saver", f"저장 완료\n\n{path}")
+
+    except Exception as e:
+        show_info("Clip Saver 오류", str(e))
 
 
 def open_save_folder(icon=None, item=None):
-    subprocess.Popen(f'explorer "{SAVE_PATH}"')
-
-
-def open_config_folder(icon=None, item=None):
-    subprocess.Popen(f'explorer "{APP_DIR}"')
+    save_path = get_save_path()
+    subprocess.Popen(f'explorer "{save_path}"')
 
 
 def quit_app(icon, item):
@@ -185,10 +352,13 @@ def quit_app(icon, item):
 
 
 def register_hotkey():
-    keyboard.add_hotkey(HOTKEY, save_clipboard)
+    config = load_config()
+    hotkey = config.get("hotkey", DEFAULT_CONFIG["hotkey"])
+    keyboard.add_hotkey(hotkey, save_clipboard)
 
 
 def main():
+    get_save_path()
     register_hotkey()
 
     icon = pystray.Icon(
@@ -197,7 +367,6 @@ def main():
         "Clip Saver",
         menu=pystray.Menu(
             pystray.MenuItem("저장 폴더 열기", open_save_folder),
-            pystray.MenuItem("설정 폴더 열기", open_config_folder),
             pystray.MenuItem("종료", quit_app)
         )
     )

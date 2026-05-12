@@ -1,4 +1,4 @@
 pyperclip
 keyboard
 pystray
-pillow
+Pillow
