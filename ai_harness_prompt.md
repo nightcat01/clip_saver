@@ -12,7 +12,7 @@
 개발 로그 / AI 메모 정리용 command.
 
 규칙:
-
+- 최상단에 규칙 내용 우선 생성
 - Markdown 형식 사용
 - YAML frontmatter 포함
 - title 생성
