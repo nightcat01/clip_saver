@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = BASE_DIR / "config.json"
 
 DEFAULT_CONFIG = {
-    "save_dir": "E:/memo/memo/clip",
+    "save_dir": "./",
     "hotkey": "ctrl+alt+a",
     "default_type": "ai-log",
     "default_tags": ["ai-log"],
