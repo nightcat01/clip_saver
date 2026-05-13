@@ -2,6 +2,53 @@
 
 AI 출력물과 메모를 빠르게 Markdown 파일로 저장하는 경량 클립보드 저장 유틸리티입니다.
 
+---
+
+# 다운로드
+
+최신 버전 다운로드:
+
+urlclipSaver Release Page[https://github.com/nightcat01/clip_saver/releases/tag/v1.1](https://github.com/nightcat01/clip_saver/releases/tag/v1.1)
+
+Release 페이지에서 최신 압축 파일(zip)을 다운로드할 수 있습니다.
+
+---
+
+# 사용 전 준비
+
+## 1. 원하는 위치에 압축 파일 저장
+
+다운로드한 zip 파일을 원하는 폴더에 저장합니다.
+
+예시:
+
+* 바탕화면
+* 다운로드 폴더
+* 개발 유틸 폴더
+* Obsidian 관련 도구 폴더
+
+---
+
+## 2. 압축 해제
+
+다운로드한 zip 파일을 압축 해제합니다.
+
+압축 해제 후 아래와 비슷한 구조가 보이면 정상입니다.
+
+```text
+clipSaver/
+├─ setup.bat
+├─ clipSaver.bat
+├─ config.json
+├─ requirements.txt
+├─ screenshot/
+└─ src/
+```
+
+이후 setup.bat부터 실행하여 설치를 진행합니다.
+
+---
+
 * Markdown 자동 저장
 * Obsidian 친화적 구조
 * 단축키 기반 저장
