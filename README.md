@@ -8,7 +8,7 @@ AI 출력물과 메모를 빠르게 Markdown 파일로 저장하는 경량 클�
 
 최신 버전 다운로드:
 
-url : clipSaver Release Page [https://github.com/nightcat01/clip_saver/releases/tag/v1.1](https://github.com/nightcat01/clip_saver/releases/tag/v1.1)
+url : clipSaver Release Page [https://github.com/nightcat01/clip_saver/releases/tag/v1.2](https://github.com/nightcat01/clip_saver/releases/tag/v1.2)
 
 Release 페이지에서 최신 압축 파일(zip)을 다운로드할 수 있습니다.
 
@@ -41,8 +41,13 @@ clipSaver/
 ├─ clipSaver.bat
 ├─ config.json
 ├─ requirements.txt
+├─ activate.bat
+├─ ai_harness_prompt.md
+├─ clipSaver.py
+├─ note_template.md
+├─ README.md
 ├─ screenshot/
-└─ src/
+└─ 
 ```
 
 이후 setup.bat부터 실행하여 설치를 진행합니다.
@@ -79,7 +84,8 @@ Python이 설치되어 있지 않은 경우 Python 다운로드 안내가 출력
 
 정상적으로 실행되면 CMD 창에서 가상환경 생성 및 라이브러리 설치가 진행됩니다.
 
-![setup.bat 실행](./screenshot/setup2.png)
+![setup.bat 실행1](./screenshot/setup2.png)
+![setup.bat 실행2](./screenshot/setup3.png)
 
 ---
 
@@ -109,7 +115,7 @@ Python이 설치되어 있지 않은 경우 Python 다운로드 안내가 출력
 
 ```json
 {
-  "save_path": "D:/ObsidianVault/AI-Logs"
+  "save_path": "./"
 }
 ```
 
@@ -125,7 +131,7 @@ Python이 설치되어 있지 않은 경우 Python 다운로드 안내가 출력
 
 ```json
 {
-  "hotkey": "ctrl+shift+s"
+  "hotkey": "ctrl+alt+a"
 }
 ```
 
