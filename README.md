@@ -8,7 +8,7 @@ AI 출력물과 메모를 빠르게 Markdown 파일로 저장하는 경량 클�
 
 최신 버전 다운로드:
 
-urlclipSaver Release Page[https://github.com/nightcat01/clip_saver/releases/tag/v1.1](https://github.com/nightcat01/clip_saver/releases/tag/v1.1)
+url : clipSaver Release Page [https://github.com/nightcat01/clip_saver/releases/tag/v1.1](https://github.com/nightcat01/clip_saver/releases/tag/v1.1)
 
 Release 페이지에서 최신 압축 파일(zip)을 다운로드할 수 있습니다.
 
