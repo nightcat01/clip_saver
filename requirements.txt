@@ -2,3 +2,5 @@ pyperclip
 keyboard
 pystray
 Pillow
+winshell
+pywin32

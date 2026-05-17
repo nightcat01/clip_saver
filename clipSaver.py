@@ -12,6 +12,8 @@ import pystray
 from PIL import Image, ImageDraw
 import tkinter as tk
 from tkinter import messagebox
+import winshell
+from win32com.client import Dispatch
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -82,6 +84,19 @@ def normalize_tags(tags):
 
     return result[:5]
 
+def add_to_startup(icon=None, item=None):
+    startup_dir = Path(winshell.startup())
+    shortcut_path = startup_dir / "Clip Saver.lnk"
+    target_path = BASE_DIR / "clipSaver.bat"
+
+    shell = Dispatch("WScript.Shell")
+    shortcut = shell.CreateShortCut(str(shortcut_path))
+    shortcut.Targetpath = str(target_path)
+    shortcut.WorkingDirectory = str(BASE_DIR)
+    shortcut.IconLocation = str(target_path)
+    shortcut.save()
+
+    icon.notify("시작프로그램에 등록 완료", "Clip Saver")
 
 def parse_ai_metadata(text, config):
     metadata = {
@@ -276,7 +291,16 @@ def show_info(title, message):
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
-    messagebox.showinfo(title, message)
+
+    root.update()
+
+    messagebox.showinfo(
+        title=title,
+        message=message,
+        parent=root
+    )
+
+    root.quit()
     root.destroy()
 
 
@@ -305,6 +329,10 @@ def show_confirm_window(content: str) -> bool:
 def save_clipboard():
     global last_saved
 
+    keyboard.release("alt")
+    keyboard.release("ctrl")
+    keyboard.release("shift")
+
     try:
         content = pyperclip.paste().strip()
         config = load_config()
@@ -313,9 +341,9 @@ def save_clipboard():
             show_info("Clip Saver", "클립보드가 비어있어.")
             return
 
-        if content == last_saved:
-            show_info("Clip Saver", "이미 저장한 내용이야.")
-            return
+        # if content == last_saved:
+        #     show_info("Clip Saver", "이미 저장한 내용이야.")
+        #     return
 
         if not show_confirm_window(content):
             return
@@ -367,6 +395,7 @@ def main():
         "Clip Saver",
         menu=pystray.Menu(
             pystray.MenuItem("저장 폴더 열기", open_save_folder),
+            pystray.MenuItem("시작프로그램에 등록", add_to_startup),
             pystray.MenuItem("종료", quit_app)
         )
     )

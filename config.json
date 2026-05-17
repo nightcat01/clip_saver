@@ -1,5 +1,5 @@
 {
-  "save_dir": "./", 
+  "save_dir": "E:/memo/memo/clip", 
   "hotkey": "ctrl+alt+a",
   "preview_length": 300,
   "filename_format": "%Y-%m-%d_%H%M%S.md",
